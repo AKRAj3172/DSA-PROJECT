@@ -1,2 +1,286 @@
-# DSA-PROJECT
-Polynomial Representation and Operations using Linked Lists
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct Term {
+    int coeff;
+    int exp;
+    struct Term *next;
+} Term;
+
+Term *createNode(int c, int e) {
+    Term *t = (Term*)malloc(sizeof(Term));
+    t->coeff = c;
+    t->exp = e;
+    t->next = NULL;
+    return t;
+}
+
+void insertTerm(Term **poly, int c, int e) {
+    if (c == 0) return;
+    Term *prev = NULL, *cur = *poly;
+    while (cur && cur->exp > e) {
+        prev = cur;
+        cur = cur->next;
+    }
+    if (cur && cur->exp == e) {
+        cur->coeff += c;
+        if (cur->coeff == 0) {
+            if (prev) prev->next = cur->next;
+            else *poly = cur->next;
+            free(cur);
+        }
+        return;
+    }
+    Term *n = createNode(c, e);
+    if (!prev) {
+        n->next = *poly;
+        *poly = n;
+    } else {
+        n->next = prev->next;
+        prev->next = n;
+    }
+}
+
+void printPoly(Term *p) {
+    if (!p) {
+        printf("0\n");
+        return;
+    }
+    int first = 1;
+    while (p) {
+        if (!first)
+            printf(p->coeff > 0 ? " + " : " - ");
+        else if (p->coeff < 0)
+            printf("-");
+        int a = abs(p->coeff);
+        if (p->exp == 0) printf("%d", a);
+        else if (p->exp == 1) {
+            if (a == 1) printf("x");
+            else printf("%dx", a);
+        } else {
+            if (a == 1) printf("x^%d", p->exp);
+            else printf("%dx^%d", a, p->exp);
+        }
+        first = 0;
+        p = p->next;
+    }
+    printf("\n");
+}
+
+Term* addPoly(Term *A, Term *B) {
+    Term *res = NULL;
+    while (A && B) {
+        if (A->exp == B->exp) {
+            insertTerm(&res, A->coeff + B->coeff, A->exp);
+            A = A->next;
+            B = B->next;
+        } else if (A->exp > B->exp) {
+            insertTerm(&res, A->coeff, A->exp);
+            A = A->next;
+        } else {
+            insertTerm(&res, B->coeff, B->exp);
+            B = B->next;
+        }
+    }
+    while (A) {
+        insertTerm(&res, A->coeff, A->exp);
+        A = A->next;
+    }
+    while (B) {
+        insertTerm(&res, B->coeff, B->exp);
+        B = B->next;
+    }
+    return res;
+}
+
+Term* subPoly(Term *A, Term *B) {
+    Term *res = NULL;
+    while (A && B) {
+        if (A->exp == B->exp) {
+            insertTerm(&res, A->coeff - B->coeff, A->exp);
+            A = A->next;
+            B = B->next;
+        } else if (A->exp > B->exp) {
+            insertTerm(&res, A->coeff, A->exp);
+            A = A->next;
+        } else {
+            insertTerm(&res, -B->coeff, B->exp);
+            B = B->next;
+        }
+    }
+    while (A) {
+        insertTerm(&res, A->coeff, A->exp);
+        A = A->next;
+    }
+    while (B) {
+        insertTerm(&res, -B->coeff, B->exp);
+        B = B->next;
+    }
+    return res;
+}
+
+Term* mulPoly(Term *A, Term *B) {
+    Term *res = NULL;
+    for (Term *pa = A; pa; pa = pa->next) {
+        for (Term *pb = B; pb; pb = pb->next) {
+            insertTerm(&res, pa->coeff * pb->coeff, pa->exp + pb->exp);
+        }
+    }
+    return res;
+}
+
+Term* divPoly(Term *A, Term *B) {
+    Term *quotient = NULL;
+    Term *remainder = NULL, *tmp = NULL;
+
+    for (Term *p = A; p; p = p->next)
+        insertTerm(&remainder, p->coeff, p->exp);
+
+    while (remainder && remainder->exp >= B->exp && B != NULL) {
+        int coeff = remainder->coeff / B->coeff;
+        int exp = remainder->exp - B->exp;
+        insertTerm(&quotient, coeff, exp);
+
+        tmp = NULL;
+        for (Term *pb = B; pb; pb = pb->next)
+            insertTerm(&tmp, coeff * pb->coeff, exp + pb->exp);
+
+        Term *newRemainder = subPoly(remainder, tmp);
+        remainder = newRemainder;
+    }
+
+    return quotient;
+}
+
+Term* differentiatePoly(Term *A) {
+    Term *res = NULL;
+    for (Term *p = A; p; p = p->next) {
+        if (p->exp != 0)
+            insertTerm(&res, p->coeff * p->exp, p->exp - 1);
+    }
+    return res;
+}
+
+Term* integratePoly(Term *A) {
+    Term *res = NULL;
+    for (Term *p = A; p; p = p->next) {
+        if (p->exp + 1 != 0) {
+            double val = (double)p->coeff / (p->exp + 1);
+            int coeff_int = (int)(val + (val >= 0 ? 0.5 : -0.5));
+            insertTerm(&res, coeff_int, p->exp + 1);
+        }
+    }
+    return res;
+}
+
+int inputNumber(const char* prompt) {
+    char buffer[100];
+    int num;
+    printf("%s", prompt);
+    if (fgets(buffer, sizeof(buffer), stdin)) {
+        if (sscanf(buffer, "%d", &num) == 1) {
+            return num;
+        }
+    }
+    return 0;
+}
+
+void inputPolyFlexible(Term **poly, int polyNum) {
+    int n = inputNumber(polyNum == 1 ? "Enter max number of terms for Polynomial 1: " : "Enter max number of terms for Polynomial 2: ");
+    printf("Please enter terms as 'coefficient exponent' or just 'coefficient' for constant term.\n");
+    printf("Enter 0 as coefficient to stop early.\n");
+
+    char buffer[100];
+    int coeff, exp, count = 0;
+
+    while (count < n) {
+        printf("Term %d (coefficient [exponent]): ", count + 1);
+        if (!fgets(buffer, sizeof(buffer), stdin)) break;
+        int parsed = sscanf(buffer, "%d %d", &coeff, &exp);
+        if (parsed == 0) continue;
+
+        if (coeff == 0) break;
+
+        if (parsed == 1) exp = 0;
+
+        insertTerm(poly, coeff, exp);
+        count++;
+    }
+}
+
+int main() {
+    int choice;
+    Term *P1 = NULL, *P2 = NULL, *RESULT = NULL;
+
+    printf("Input for Polynomial 1:\n");
+    inputPolyFlexible(&P1, 1);
+
+    printf("\nInput for Polynomial 2:\n");
+    inputPolyFlexible(&P2, 2);
+
+    printf("\nPolynomial 1: ");
+    printPoly(P1);
+
+    printf("Polynomial 2: ");
+    printPoly(P2);
+
+    do {
+        printf("\nChoose operation:\n");
+        printf("1. Addition\n2. Subtraction\n3. Multiplication\n4. Division (P1 / P2)\n5. Differentiation\n6. Integration\n0. Exit\nYour choice: ");
+        scanf("%d", &choice);
+        while(getchar()!='\n'); // clear input buffer
+
+        switch (choice) {
+            case 1:
+                RESULT = addPoly(P1, P2);
+                printf("\nSum (P1 + P2): ");
+                printPoly(RESULT);
+                break;
+            case 2:
+                RESULT = subPoly(P1, P2);
+                printf("\nDifference (P1 - P2): ");
+                printPoly(RESULT);
+                break;
+            case 3:
+                RESULT = mulPoly(P1, P2);
+                printf("\nProduct (P1 * P2): ");
+                printPoly(RESULT);
+                break;
+            case 4:
+                RESULT = divPoly(P1, P2);
+                printf("\nQuotient (P1 / P2): ");
+                printPoly(RESULT);
+                break;
+            case 5: {
+                int polyChoice;
+                printf("Differentiate which polynomial? (1 or 2): ");
+                scanf("%d", &polyChoice);
+                while(getchar()!='\n');
+                Term *target = (polyChoice == 2) ? P2 : P1;
+                RESULT = differentiatePoly(target);
+                printf("\nDerivative of P%d: ", polyChoice);
+                printPoly(RESULT);
+                break;
+            }
+            case 6: {
+                int polyChoice;
+                printf("Integrate which polynomial? (1 or 2): ");
+                scanf("%d", &polyChoice);
+                while(getchar()!='\n');
+                Term *target = (polyChoice == 2) ? P2 : P1;
+                RESULT = integratePoly(target);
+                printf("\nIndefinite Integral of P%d (constant C omitted): ", polyChoice);
+                printPoly(RESULT);
+                break;
+            }
+            case 0:
+                printf("Exiting.\n");
+                break;
+            default:
+                printf("Invalid choice.\n");
+        }
+    } while (choice != 0);
+
+    return 0;
+}
+
